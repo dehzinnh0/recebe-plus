@@ -96,15 +96,16 @@ function audit(db,action,record,role) {
   db.audit=db.audit.slice(0,1000);
 }
 
-async function handleApi(req,res,url) {
-  if(req.method==="GET"&&url.pathname==="/api/health") return json(res,200,{ok:true});
-  if(req.method==="POST"&&url.pathname==="/api/login") {
-    const ip=req.socket.remoteAddress||"unknown";if(isRateLimited(ip))return json(res,429,{error:"Muitas tentativas. Aguarde antes de tentar novamente."});
-    try { const input=await readBody(req);const username=cleanText(input.username,60);const user=readUsers().find(item=>item.username.toLowerCase()===username.toLowerCase());
-      if(!user||!verifyPassword(input.password,user)){registerFailure(ip);return json(res,401,{error:"Usuário ou senha inválidos"});}
-      loginAttempts.delete(ip);const token=crypto.randomBytes(32).toString("hex");const csrf=crypto.randomBytes(24).toString("hex");sessions.set(token,{username:user.username,role:user.role,csrf,expiresAt:Date.now()+SESSION_TTL});setSessionCookie(res,token);return json(res,200,{user:{username:user.username,role:user.role},csrf});
-    } catch(error){return json(res,400,{error:"Não foi possível processar o login"});}
-  }
+async function handleApi(req, res, url) {
+    if (req.method === "GET" && url.pathname === "/api/health") return json(res, 200, { ok: true });
+    if (req.method === "POST" && url.pathname === "/api/login") {
+        const ip = req.socket.remoteAddress || "unknown"; if (isRateLimited(ip)) return json(res, 429, { error: "Muitas tentativas. Aguarde antes de tentar novamente." });
+        try {
+            const input = await readBody(req); const username = cleanText(input.username, 60); const user = readUsers().find(item => item.username.toLowerCase() === username.toLowerCase());
+            if (!user || !verifyPassword(input.password, user)) { registerFailure(ip); return json(res, 401, { error: "Usuário ou senha inválidos" }); }
+            loginAttempts.delete(ip); const token = crypto.randomBytes(32).toString("hex"); const csrf = crypto.randomBytes(24).toString("hex"); sessions.set(token, { username: user.username, role: user.role, csrf, expiresAt: Date.now() + SESSION_TTL }); setSessionCookie(res, token); return json(res, 200, { user: { username: user.username, role: user.role }, csrf });
+        } catch (error) { return json(res, 400, { error: "Não foi possível processar o login" }); }
+    }
     // GERENCIAMENTO DE USUÁRIOS (GET para listar, POST para criar/editar)
     if (req.method === "GET" && url.pathname === "/api/users") {
         const session = requireSession(req, res); if (!session) return;
@@ -163,30 +164,61 @@ async function handleApi(req,res,url) {
             return json(res, 500, { error: "Erro interno ao salvar usuário." });
         }
     }
-  if(req.method==="GET"&&url.pathname==="/api/me") { const session=requireSession(req,res);if(!session)return;return json(res,200,{user:{username:session.username,role:session.role},csrf:session.csrf}); }
-  if(req.method==="POST"&&url.pathname==="/api/logout") { const session=requireSession(req,res,{write:true});if(!session)return;sessions.delete(session.token);setSessionCookie(res,"",0);return json(res,200,{ok:true}); }
+    if (req.method === "GET" && url.pathname === "/api/me") { const session = requireSession(req, res); if (!session) return; return json(res, 200, { user: { username: session.username, role: session.role }, csrf: session.csrf }); }
+    if (req.method === "POST" && url.pathname === "/api/logout") { const session = requireSession(req, res, { write: true }); if (!session) return; sessions.delete(session.token); setSessionCookie(res, "", 0); return json(res, 200, { ok: true }); }
 
-  const write=req.method!=="GET";const session=requireSession(req,res,{write});if(!session)return;
-  const role=session.role;
-  if(req.method==="GET"&&url.pathname==="/api/records") { const db=readDb(); return json(res,200,{records:db.records,updatedAt:new Date().toISOString()}); }
-  if(req.method==="GET"&&url.pathname==="/api/audit") { if(role!=="Supervisor")return json(res,403,{error:"Acesso restrito ao supervisor"});const db=readDb();return json(res,200,{audit:db.audit.slice(0,100)}); }
-  if(req.method==="POST"&&url.pathname==="/api/records") {
-    if(!["Conferente","Assistente","Supervisor"].includes(role))return json(res,403,{error:"Perfil sem permissão"});
-    try { const input=await readBody(req);const record=validateRecord(input);const db=readDb();db.records.unshift(record);audit(db,"Recebimento criado",record,role);writeDb(db);return json(res,201,{record}); }
-    catch(error){return json(res,400,{error:error.message});}
-  }
-  const match=url.pathname.match(/^\/api\/records\/([^/]+)\/transition$/);
-  if(req.method==="PATCH"&&match) {
-    if(!["Conferente","Supervisor"].includes(role))return json(res,403,{error:"Somente conferentes e supervisores podem alterar a descarga"});
-    try { const input=await readBody(req);const allowed={start:"Em descarga",finish:"Concluído",issue:"Em Atraso"};if(!allowed[input.action])throw new Error("Transição inválida");const db=readDb();const record=db.records.find(r=>r.id===decodeURIComponent(match[1]));if(!record)return json(res,404,{error:"Registro não encontrado"});
-      if(input.action==="start"){if(!["Em Trânsito","Aguardando"].includes(record.status))throw new Error("A descarga não pode ser iniciada neste status");const volume=Number(input.volumetria);if(!Number.isFinite(volume)||volume<1)throw new Error("Informe a volumetria para iniciar a descarga");record.volumetria=volume;record.inicio=new Date().toISOString();}
-      if(input.action==="finish"||input.action==="issue"){if(record.status!=="Em descarga")throw new Error("A descarga não está em andamento");record.fim=new Date().toISOString();}
-      record.status=allowed[input.action];audit(db,`Status alterado para ${record.status}`,record,role);writeDb(db);return json(res,200,{record});
-    } catch(error){return json(res,400,{error:error.message});}
-  }
-  return json(res,404,{error:"Rota não encontrada"});
+    const write = req.method !== "GET"; const session = requireSession(req, res, { write }); if (!session) return;
+    const role = session.role;
+    if (req.method === "GET" && url.pathname === "/api/records") { const db = readDb(); return json(res, 200, { records: db.records, updatedAt: new Date().toISOString() }); }
+    if (req.method === "GET" && url.pathname === "/api/audit") { if (role !== "Supervisor") return json(res, 403, { error: "Acesso restrito ao supervisor" }); const db = readDb(); return json(res, 200, { audit: db.audit.slice(0, 100) }); }
+    if (req.method === "POST" && url.pathname === "/api/records") {
+        if (!["Conferente", "Assistente", "Supervisor"].includes(role)) return json(res, 403, { error: "Perfil sem permissão" });
+        try { const input = await readBody(req); const record = validateRecord(input); const db = readDb(); db.records.unshift(record); audit(db, "Recebimento criado", record, role); writeDb(db); return json(res, 201, { record }); }
+        catch (error) { return json(res, 400, { error: error.message }); }
+    }
+    const match=url.pathname.match(/^\/api\/records\/([^/]+)\/transition$/);
+    if (req.method==="PATCH"&&match) {
+        if (!["Conferente", "Supervisor"].includes(role)) return json(res, 403, { error: "Somente conferentes e supervisores podem alterar a descarga" });
+        try {
+            const input = await readBody(req);
+            const allowed = { start: "Em descarga", finish: "Concluído", issue: "Em Atraso" };
+            if (!allowed[input.action]) throw new Error("Transição inválida");
+
+            const db = readDb();
+            const record = db.records.find(r => r.id === decodeURIComponent(match[1]));
+            if (!record) return json(res, 404, { error: "Registro não encontrado" });
+
+            if (input.action === "start") {
+                if (!["Em Trânsito", "Aguardando"].includes(record.status)) throw new Error("A descarga não pode ser iniciada neste status");
+                const volume = Number(input.volumetria);
+                if (!Number.isFinite(volume) || volume < 1) throw new Error("Informe a volumetria para iniciar a descarga");
+                record.volumetria = volume;
+                record.inicio = new Date().toISOString();
+
+                // ATUALIZAÇÃO: Gravar o nome do conferente que clicou no botão
+                if (input.conferente) record.conferente = input.conferente;
+            }
+
+            if (input.action === "finish" || input.action === "issue") {
+                if (record.status !== "Em descarga") throw new Error("A descarga não está em andamento");
+                record.fim = new Date().toISOString();
+
+                // ATUALIZAÇÃO: Gravar os dados dos Insumos na base
+                if (input.insumo_tipo) {
+                    record.insumo_tipo = input.insumo_tipo;
+                    record.insumo_qtd = input.insumo_qtd;
+                    record.insumo_status = input.insumo_status;
+                    record.insumo_obs = input.insumo_obs;
+                }
+            }
+
+            record.status = allowed[input.action];
+            audit(db, `Status alterado para ${record.status}`, record, role);
+            writeDb(db);
+            return json(res, 200, { record });
+        } catch (error) { return json(res, 400, { error: error.message }); }
+    }
 }
-
 function serveStatic(req,res,url) {
   const requested=url.pathname==="/"?"index.html":decodeURIComponent(url.pathname.slice(1));
   if(!PUBLIC_FILES.has(requested)) return json(res,404,{error:"Arquivo não encontrado"});
