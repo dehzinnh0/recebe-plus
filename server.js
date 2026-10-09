@@ -209,6 +209,7 @@ async function handleApi(req, res, url) {
                     record.insumo_qtd = input.insumo_qtd;
                     record.insumo_status = input.insumo_status;
                     record.insumo_obs = input.insumo_obs;
+                    record.insumos_lista = input.insumos;
                 }
             }
 

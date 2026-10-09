@@ -509,54 +509,63 @@ function openStartUnload(id) {
     <div class="modal-actions"><button type="button" class="secondary-btn" data-action="close-modal">Cancelar</button><button class="primary-btn" type="submit">Confirmar e Iniciar</button></div>
   </form></div>`;
 }
+// Molde dinâmico para carregar múltiplos insumos
+function getInsumoTemplate(index = 0) {
+    return `
+    <div class="form-grid insumo-item" style="border: 1px solid #e1e4e8; padding: 15px; border-radius: 8px; position: relative; margin-bottom: 12px; background: #fff;">
+        ${index > 0 ? `<button type="button" data-action="none" onclick="this.closest('.insumo-item').remove()" style="position: absolute; right: 10px; top: 10px; background: none; border: none; font-size: 20px; color: #ff4d4f; cursor: pointer; line-height: 1;">×</button>` : ""}
+        <div class="field">
+            <label>Tipo de Insumo *</label>
+            <select name="tipo_insumo" onchange="const wrap = this.closest('.insumo-item').querySelector('.status-insumo-wrap'); if(this.value==='Gaylords'||this.value==='Bags') wrap.style.display='block'; else wrap.style.display='none';">
+               <option value="Gaylords">Gaylords</option>
+               <option value="Pallets">Pallets</option>
+               <option value="Bags">Bags</option>
+               <option value="Strech">Strech</option>
+               <option value="Outros">Outros</option>
+            </select>
+        </div>
+        <div class="field">
+            <label>Quantidade *</label>
+            <input type="number" name="qtd_insumo" min="1" placeholder="Ex: 12" required>
+        </div>
+        <div class="field full status-insumo-wrap" style="display:block;">
+            <label>Condição (Bags/Gaylords)</label>
+            <select name="status_insumo">
+               <option value="Completas">Completas</option>
+               <option value="Incompletas">Incompletas</option>
+            </select>
+        </div>
+        <div class="field full">
+            <label>Observação</label>
+            <input type="text" name="obs_insumo" placeholder="Detalhes (Opcional)">
+        </div>
+    </div>`;
+}
+
+// Nova versão da tela com scroll (para celular) e botão de + Insumos
 function openPromptInsumos(id) {
     const r = allRecords().find(item => item.id === id); if (!r) return;
     $("#modal-root").innerHTML = `<div class="overlay" data-action="close-modal"><form class="modal" id="finish-unload-form" data-id="${esc(r.id)}">
     <div class="modal-head"><div><h2>Finalizar Recebimento</h2><p>Doca ${dockLabel(r.doca)} • Deseja registrar devolução de insumos?</p></div><button type="button" class="close-btn" data-action="close-modal">×</button></div>
-    <div class="modal-body">
-      
+    
+    <div class="modal-body" style="max-height: 65vh; overflow-y: auto;">
       <div style="display:flex; gap:10px; margin-bottom: 15px;">
         <label style="display:flex; align-items:center; gap:5px;"><input type="radio" name="tem_insumo" value="sim" checked> Sim, carregar insumos</label>
         <label style="display:flex; align-items:center; gap:5px;"><input type="radio" name="tem_insumo" value="nao"> Não há insumos</label>
       </div>
 
       <div id="insumos-fields">
-          <div class="form-grid">
-            <div class="field">
-              <label>Tipo de Insumo *</label>
-              <select name="tipo_insumo">
-                 <option value="Gaylords">Gaylords</option>
-                 <option value="Pallets">Pallets</option>
-                 <option value="Bags">Bags</option>
-                 <option value="Strech">Strech</option>
-                 <option value="Outros">Outros</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>Quantidade *</label>
-              <input type="number" name="qtd_insumo" min="1" placeholder="Ex: 12">
-            </div>
-            
-            <div class="field full" id="status-insumo-wrap" style="display:none;">
-              <label>Condição (Bags/Gaylords)</label>
-              <select name="status_insumo">
-                 <option value="Completas">Completas</option>
-                 <option value="Incompletas">Incompletas</option>
-              </select>
-            </div>
-
-            <div class="field full">
-              <label>Observação</label>
-              <input type="text" name="obs_insumo" placeholder="Detalhes (Opcional)">
-            </div>
-            
-            <div class="field full">
-              <button type="button" class="secondary-btn" style="width:100%; border:1px solid #ccc; background:#f9f9f9;" onclick="document.getElementById('camera-input').click()">📷 Adicionar Foto (Mobile)</button>
-              <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none;" onchange="alert('Foto anexada com sucesso!')">
-            </div>
+          <div id="insumos-list">
+              ${getInsumoTemplate(0)}
+          </div>
+          
+          <button type="button" class="secondary-btn" data-action="add-insumo" style="width:100%; margin-bottom: 15px; border-style: dashed; color: var(--brand);">+ Adicionar outro insumo</button>
+          
+          <div class="field full">
+            <button type="button" class="secondary-btn" data-action="open-camera" style="width:100%; border:1px solid #ccc; background:#f9f9f9; color: var(--ink);">📷 Adicionar Foto (Mobile)</button>
+            <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none;" onchange="alert('Foto anexada com sucesso!')">
           </div>
       </div>
-
     </div>
     <div class="modal-actions">
         <button type="button" class="secondary-btn" data-action="close-modal">Cancelar</button>
@@ -564,31 +573,16 @@ function openPromptInsumos(id) {
     </div>
   </form></div>`;
 
-    // Lógica para esconder formulário se marcar "Não"
     const form = document.getElementById("finish-unload-form");
     const fieldsWrap = document.getElementById("insumos-fields");
-    const tipoSelect = form.querySelector('[name="tipo_insumo"]');
-    const statusWrap = document.getElementById("status-insumo-wrap");
 
     form.addEventListener("change", (e) => {
         if (e.target.name === "tem_insumo") {
             fieldsWrap.style.display = e.target.value === "sim" ? "block" : "none";
-            // Tornar quantidade obrigatória apenas se for registrar insumo
-            form.querySelector('[name="qtd_insumo"]').required = (e.target.value === "sim");
-        }
-
-        if (e.target.name === "tipo_insumo" || e.target.name === "tem_insumo") {
-            if (tipoSelect.value === "Gaylords" || tipoSelect.value === "Bags") {
-                statusWrap.style.display = "block";
-            } else {
-                statusWrap.style.display = "none";
-            }
+            const firstQtd = form.querySelector('[name="qtd_insumo"]');
+            if (firstQtd) firstQtd.required = (e.target.value === "sim");
         }
     });
-
-    // Acionar a verificação inicial
-    form.querySelector('[name="qtd_insumo"]').required = true;
-    if (tipoSelect.value === "Gaylords" || tipoSelect.value === "Bags") statusWrap.style.display = "block";
 }
 function openSheetConfig() {
     $("#modal-root").innerHTML = `<div class="overlay" data-action="close-modal"><form class="modal small" id="sheet-form" onclick="event.stopPropagation()"><div class="modal-head"><div><h2>Conectar Google Sheets</h2><p>Integração somente leitura com a torre de controle.</p></div><button type="button" class="close-btn" data-action="close-modal">×</button></div><div class="modal-body">
@@ -698,6 +692,15 @@ document.addEventListener("click", async event => {
     if (action === "finish-unload" && await updateRecord(button.dataset.id, "finish", { status: "Concluído", fim: new Date().toISOString() })) toast("Descarga finalizada", "Indicadores atualizados com sucesso.");
     if (action === "flag-issue" && await updateRecord(button.dataset.id, "issue", { status: "Em Atraso", fim: new Date().toISOString() })) toast("Atraso registrado", "O recebimento foi sinalizado para análise.");
     if (action === "disconnect-sheet") { state.config.sheetUrl = ""; state.sheetRecords = []; saveConfig(); $("#modal-root").innerHTML = ""; renderApp(); toast("Planilha desconectada"); }
+    if (action === "open-camera") {document.getElementById("camera-input").click();}
+    if (action === "add-insumo") {const list = document.getElementById("insumos-list");
+        if (list) {const div = document.createElement("div");
+            div.innerHTML = getInsumoTemplate(list.children.length);
+            list.appendChild(div.firstElementChild);
+            // Faz a tela rolar um pouco para baixo suavemente para ver o novo campo
+            document.querySelector('.modal-body').scrollBy({ top: 150, behavior: 'smooth' });
+        }
+    }
 });
 
 document.addEventListener("submit", async event => {
@@ -732,12 +735,21 @@ document.addEventListener("submit", async event => {
 
         const payload = { status: "Concluído", fim: new Date().toISOString() };
 
-        // Se registrou insumo, salva os dados junto (poderão ser lidos depois no Excel)
         if (form.get("tem_insumo") === "sim") {
-            payload.insumo_tipo = form.get("tipo_insumo");
-            payload.insumo_qtd = form.get("qtd_insumo");
-            payload.insumo_status = form.get("status_insumo") || "";
-            payload.insumo_obs = form.get("obs_insumo") || "";
+            // Varre a tela pegando todos os blocos de insumo que o usuário criou
+            const items = [...event.target.querySelectorAll('.insumo-item')];
+            const insumos = items.map(item => ({
+                tipo: item.querySelector('[name="tipo_insumo"]').value,
+                qtd: item.querySelector('[name="qtd_insumo"]').value,
+                status: item.querySelector('.status-insumo-wrap').style.display !== 'none' ? item.querySelector('[name="status_insumo"]').value : "",
+                obs: item.querySelector('[name="obs_insumo"]').value
+            }));
+
+            payload.insumos = JSON.stringify(insumos); // Envia o pacote completo para o servidor
+
+            // Cria um resumo bonito para aparecer na tabela do Excel (ex: "12x Gaylords, 4x Pallets")
+            payload.insumo_tipo = insumos.map(i => `${i.qtd}x ${i.tipo}`).join(", ");
+            payload.insumo_qtd = insumos.reduce((acc, curr) => acc + Number(curr.qtd || 0), 0);
         }
 
         if (await updateRecord(id, "finish", payload, payload)) {
