@@ -1,4 +1,4 @@
-const CACHE = "recebe-plus-v5";
+const CACHE = "recebe-plus-v10";
 const FILES = ["./", "index.html", "styles.css", "app.js", "manifest.json", "icon.svg"];
 self.addEventListener("install", event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES))));
 self.addEventListener("fetch", event => event.respondWith(caches.match(event.request).then(hit => hit || fetch(event.request))));
