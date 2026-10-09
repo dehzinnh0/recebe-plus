@@ -1,0 +1,205 @@
+{
+  "records": [
+    {
+      "id": "R-4BF10398",
+      "data": "2026-10-08T00:04:00.000Z",
+      "origem": "CD 5350",
+      "doca": "3",
+      "motorista": "Alex Santos",
+      "placa": "ABC1122",
+      "volumetria": 2000,
+      "inicio": "2026-10-08T01:00:24.657Z",
+      "fim": "2026-10-08T01:00:29.748Z",
+      "sla": 60,
+      "conferente": "andre.icosta",
+      "status": "Concluído",
+      "source": "server"
+    },
+    {
+      "id": "R-4F756C0D",
+      "data": "2026-10-08T00:50:00.000Z",
+      "origem": "HJUN",
+      "doca": "2",
+      "motorista": "José Silva",
+      "placa": "DDA1223",
+      "volumetria": 5000,
+      "inicio": "2026-10-08T00:51:21.233Z",
+      "fim": "2026-10-08T00:59:17.539Z",
+      "sla": 60,
+      "conferente": "André Israel da Costa",
+      "status": "Concluído",
+      "source": "server"
+    },
+    {
+      "id": "R-F6796228",
+      "data": "2026-10-08T00:03:00.000Z",
+      "origem": "Mandaê",
+      "doca": "1",
+      "motorista": "Flavio Souza",
+      "placa": "DDB1A4B",
+      "volumetria": 1500,
+      "inicio": "2026-10-08T00:05:24.074Z",
+      "fim": "2026-10-08T00:21:08.800Z",
+      "sla": 60,
+      "conferente": "Andre",
+      "status": "Concluído",
+      "source": "server"
+    },
+    {
+      "id": "R-3B58BE2B",
+      "data": "2026-10-07T23:15:00.000Z",
+      "origem": "CD 300",
+      "doca": "11",
+      "motorista": "Antonio João",
+      "placa": "BBG1A22",
+      "volumetria": 4000,
+      "inicio": "2026-10-07T23:17:00.258Z",
+      "fim": "2026-10-07T23:48:56.372Z",
+      "sla": 60,
+      "conferente": "ANDRÉ",
+      "status": "Concluído",
+      "source": "server"
+    },
+    {
+      "id": "D-101",
+      "data": "2026-10-06T07:20:00.000Z",
+      "origem": "CD Guarulhos",
+      "doca": "3",
+      "motorista": "Carlos Mendes",
+      "placa": "RFG-8J21",
+      "volumetria": 1860,
+      "inicio": "2026-10-06T07:42:00.000Z",
+      "fim": "2026-10-06T08:31:00.000Z",
+      "sla": 60,
+      "conferente": "Ana Souza",
+      "status": "Concluído",
+      "source": "server"
+    },
+    {
+      "id": "D-102",
+      "data": "2026-10-06T08:10:00.000Z",
+      "origem": "Hub Campinas",
+      "doca": "5",
+      "motorista": "João Ribeiro",
+      "placa": "GHT-4C07",
+      "volumetria": 2430,
+      "inicio": "2026-10-06T08:28:00.000Z",
+      "fim": null,
+      "sla": 75,
+      "conferente": "Marcos Lima",
+      "status": "Em descarga",
+      "source": "server"
+    },
+    {
+      "id": "D-103",
+      "data": "2026-10-06T09:00:00.000Z",
+      "origem": "CD Extrema",
+      "doca": "2",
+      "motorista": "Paulo Nunes",
+      "placa": "BXR-1D94",
+      "volumetria": 980,
+      "inicio": null,
+      "fim": null,
+      "sla": 45,
+      "conferente": "—",
+      "status": "Aguardando",
+      "source": "server"
+    },
+    {
+      "id": "D-104",
+      "data": "2026-10-06T09:35:00.000Z",
+      "origem": "Hub Sorocaba",
+      "doca": "8",
+      "motorista": "Rafael Alves",
+      "placa": "TJK-6F13",
+      "volumetria": 3150,
+      "inicio": null,
+      "fim": null,
+      "sla": 90,
+      "conferente": "Beatriz Reis",
+      "status": "Em Trânsito",
+      "source": "server"
+    },
+    {
+      "id": "D-105",
+      "data": "2026-10-06T10:20:00.000Z",
+      "origem": "CD Louveira",
+      "doca": "1",
+      "motorista": "Diego Martins",
+      "placa": "KLM-9A42",
+      "volumetria": 1420,
+      "inicio": null,
+      "fim": null,
+      "sla": 55,
+      "conferente": "—",
+      "status": "Em Trânsito",
+      "source": "server"
+    }
+  ],
+  "audit": [
+    {
+      "id": "4da9281c-b374-4e48-a95d-55c908447681",
+      "timestamp": "2026-10-08T01:00:29.748Z",
+      "action": "Status alterado para Concluído",
+      "recordId": "R-4BF10398",
+      "placa": "ABC1122",
+      "role": "Conferente"
+    },
+    {
+      "id": "ac0eefef-2658-433b-8656-d4b5be1f238e",
+      "timestamp": "2026-10-08T01:00:24.670Z",
+      "action": "Recebimento criado",
+      "recordId": "R-4BF10398",
+      "placa": "ABC1122",
+      "role": "Conferente"
+    },
+    {
+      "id": "c25d97c9-0660-4677-ac52-d661c6ac00c9",
+      "timestamp": "2026-10-08T00:59:17.539Z",
+      "action": "Status alterado para Concluído",
+      "recordId": "R-4F756C0D",
+      "placa": "DDA1223",
+      "role": "Supervisor"
+    },
+    {
+      "id": "5fc7a17a-27ba-47b6-b139-2dd4e21dbb7c",
+      "timestamp": "2026-10-08T00:51:21.551Z",
+      "action": "Recebimento criado",
+      "recordId": "R-4F756C0D",
+      "placa": "DDA1223",
+      "role": "Conferente"
+    },
+    {
+      "id": "a9666b6d-fdda-469b-b6fd-cbc0f2adc94c",
+      "timestamp": "2026-10-08T00:21:08.801Z",
+      "action": "Status alterado para Concluído",
+      "recordId": "R-F6796228",
+      "placa": "DDB1A4B",
+      "role": "Supervisor"
+    },
+    {
+      "id": "955a885a-1535-4b0a-aa10-eb6432215a4c",
+      "timestamp": "2026-10-08T00:05:24.089Z",
+      "action": "Recebimento criado",
+      "recordId": "R-F6796228",
+      "placa": "DDB1A4B",
+      "role": "Conferente"
+    },
+    {
+      "id": "65982d74-ac3c-433e-bd63-7481d26ec213",
+      "timestamp": "2026-10-07T23:48:56.372Z",
+      "action": "Status alterado para Concluído",
+      "recordId": "R-3B58BE2B",
+      "placa": "BBG1A22",
+      "role": "Supervisor"
+    },
+    {
+      "id": "9b3c1e3f-feec-4dc4-b3e8-e74233b2b088",
+      "timestamp": "2026-10-07T23:17:00.576Z",
+      "action": "Recebimento criado",
+      "recordId": "R-3B58BE2B",
+      "placa": "BBG1A22",
+      "role": "Supervisor"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "recebe-plus-mvp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MVP de controle de recebimento logístico",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "googleapis": "^184.0.0",
+    "node-cron": "^4.6.0",
+    "xlsx": "^0.18.5"
+  }
+}
