@@ -4,7 +4,14 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { Pool } = require("pg");
 
+// Verifica se existe a variável do Render (PostgreSQL)
+const usePg = Boolean(process.env.DATABASE_URL);
+const pool = usePg ? new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_URL.includes("localhost") ? false : { rejectUnauthorized: false }
+}) : null;
 const PORT = Number(process.env.PORT || 3000);
 const ROOT = __dirname;
 const DATA_FILE = path.join(ROOT, "data", "recebimentos.json");
@@ -16,9 +23,22 @@ const PUBLIC_FILES = new Set(["index.html","styles.css","app.js","manifest.json"
 
 const MIME = {".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"application/javascript; charset=utf-8",".json":"application/json; charset=utf-8",".svg":"image/svg+xml",".webmanifest":"application/manifest+json"};
 
-function readUsers() {
-  try { const parsed=JSON.parse(fs.readFileSync(USERS_FILE,"utf8"));return Array.isArray(parsed.users)?parsed.users:[]; }
-  catch { return []; }
+async function readUsers() {
+    if (usePg) {
+        try {
+            const res = await pool.query("SELECT * FROM usuarios");
+            return res.rows;
+        } catch (err) {
+            console.error("Erro ao ler usuários no PG:", err);
+            return [];
+        }
+    }
+    try {
+        const parsed = JSON.parse(fs.readFileSync(USERS_FILE, "utf8"));
+        return Array.isArray(parsed.users) ? parsed.users : [];
+    } catch {
+        return [];
+    }
 }
 function verifyPassword(password,user) {
   try { const actual=crypto.scryptSync(String(password),user.salt,64);const expected=Buffer.from(user.hash,"hex");return actual.length===expected.length&&crypto.timingSafeEqual(actual,expected); }
@@ -157,13 +177,89 @@ function audit(db,action,record,role) {
   db.audit.unshift({id:crypto.randomUUID(),timestamp:new Date().toISOString(),action,recordId:record.id,placa:record.placa,role:cleanText(role,30)||"Conferente"});
   db.audit=db.audit.slice(0,1000);
 }
+async function initDb() {
+    if (!usePg) return;
+    const client = await pool.connect();
+    try {
+        await client.query(`
+      CREATE TABLE IF NOT EXISTS usuarios (
+        id VARCHAR(36) PRIMARY KEY,
+        username VARCHAR(60) UNIQUE NOT NULL,
+        name VARCHAR(100) NOT NULL,
+        role VARCHAR(20) NOT NULL,
+        hash VARCHAR(128) NOT NULL,
+        salt VARCHAR(32) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
 
+      CREATE TABLE IF NOT EXISTS recebimentos (
+        id VARCHAR(36) PRIMARY KEY,
+        data TIMESTAMP WITH TIME ZONE NOT NULL,
+        origem VARCHAR(120) NOT NULL,
+        placa VARCHAR(10) NOT NULL,
+        motorista VARCHAR(120) NOT NULL,
+        doca VARCHAR(10) DEFAULT '—',
+        volumetria INT DEFAULT 0,
+        sla INT DEFAULT 60,
+        status VARCHAR(30) DEFAULT 'Em Trânsito',
+        inicio TIMESTAMP WITH TIME ZONE,
+        fim TIMESTAMP WITH TIME ZONE,
+        conferente VARCHAR(100) DEFAULT '—',
+        insumo_tipo TEXT,
+        insumo_qtd INT,
+        insumo_status TEXT,
+        insumo_obs TEXT,
+        insumos_lista JSONB,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS auditoria (
+        id VARCHAR(36) PRIMARY KEY,
+        timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        action VARCHAR(120) NOT NULL,
+        record_id VARCHAR(36),
+        placa VARCHAR(20),
+        role VARCHAR(60)
+      );
+    `);
+
+        // Bootstrap do usuário admin no PostgreSQL se o banco estiver vazio
+        const resUsers = await client.query("SELECT COUNT(*) FROM usuarios");
+        if (parseInt(resUsers.rows[0].count, 10) === 0) {
+            const initialAdminPassword = process.env.ADMIN_INITIAL_PASSWORD || "admin12345678";
+            const salt = crypto.randomBytes(16).toString("hex");
+            const hash = crypto.scryptSync(initialAdminPassword, salt, 64).toString("hex");
+            await client.query(
+                "INSERT INTO usuarios (id, username, name, role, hash, salt) VALUES ($1, $2, $3, $4, $5, $6)",
+                [crypto.randomUUID(), "admin", "Administrador do Sistema", "Supervisor", hash, salt]
+            );
+            console.log(`✅ [PostgreSQL] Administrador inicial criado com sucesso.`);
+        }
+    } catch (err) {
+        console.error("❌ Erro ao inicializar tabelas no PostgreSQL:", err);
+    } finally {
+        client.release();
+    }
+}
+function auditUserManagement(db, action, targetUsername, targetRole, actorUsername) {
+    if (!Array.isArray(db.audit)) db.audit = [];
+    db.audit.unshift({
+        id: crypto.randomUUID(),
+        timestamp: new Date().toISOString(),
+        action: `[SEGURANÇA] ${action}`,
+        recordId: targetUsername,
+        placa: targetRole,
+        role: actorUsername
+    });
+    db.audit = db.audit.slice(0, 1000);
+}
+initDb();
 async function handleApi(req, res, url) {
     if (req.method === "GET" && url.pathname === "/api/health") return json(res, 200, { ok: true });
     if (req.method === "POST" && url.pathname === "/api/login") {
         const ip = req.socket.remoteAddress || "unknown"; if (isRateLimited(ip)) return json(res, 429, { error: "Muitas tentativas. Aguarde antes de tentar novamente." });
         try {
-            const input = await readBody(req); const username = cleanText(input.username, 60); const user = readUsers().find(item => item.username.toLowerCase() === username.toLowerCase());
+            const input = await readBody(req); const username = cleanText(input.username, 60); const user = (await readUsers()).find(item => item.username.toLowerCase() === username.toLowerCase());
             if (!user || !verifyPassword(input.password, user)) { registerFailure(ip); return json(res, 401, { error: "Usuário ou senha inválidos" }); }
             loginAttempts.delete(ip); const token = crypto.randomBytes(32).toString("hex"); const csrf = crypto.randomBytes(24).toString("hex"); sessions.set(token, { username: user.username, role: user.role, csrf, expiresAt: Date.now() + SESSION_TTL }); setSessionCookie(res, token); return json(res, 200, { user: { username: user.username, role: user.role }, csrf });
         } catch (error) { return json(res, 400, { error: "Não foi possível processar o login" }); }
@@ -173,7 +269,7 @@ async function handleApi(req, res, url) {
         const session = requireSession(req, res); if (!session) return;
         if (session.role !== "Supervisor") return json(res, 403, { error: "Acesso negado." });
         // Retorna a lista omitindo os dados sensíveis (senhas/hashes)
-        const users = readUsers().map(u => ({ username: u.username, name: u.name || "", role: u.role }));
+        const users = (await readUsers()).map(u => ({ username: u.username, name: u.name || "", role: u.role }));
         return json(res, 200, { users });
     }
     if (req.method === "POST" && url.pathname === "/api/users") {
@@ -193,15 +289,17 @@ async function handleApi(req, res, url) {
                 return json(res, 400, { error: "Preencha todos os campos corretamente." });
             }
 
-            const usersDb = readUsers();
+            const usersDb = await readUsers();
             const existingIndex = usersDb.findIndex(u => u.username.toLowerCase() === username.toLowerCase());
+
+            let salt, hash;
 
             if (action === "create") {
                 if (existingIndex >= 0) return json(res, 400, { error: "Este nome de usuário (login) já existe." });
                 if (password.length < 6) return json(res, 400, { error: "A senha deve ter pelo menos 6 caracteres." });
 
-                const salt = crypto.randomBytes(16).toString("hex");
-                const hash = crypto.scryptSync(password, salt, 64).toString("hex");
+                salt = crypto.randomBytes(16).toString("hex");
+                hash = crypto.scryptSync(password, salt, 64).toString("hex");
                 usersDb.push({ username, name, role, salt, hash });
 
             } else if (action === "update") {
@@ -217,23 +315,38 @@ async function handleApi(req, res, url) {
 
                 usersDb[existingIndex].name = name;
                 usersDb[existingIndex].role = role;
+                salt = currentUser.salt;
+                hash = currentUser.hash;
 
-                // Só atualiza a senha se uma nova senha for fornecida
                 if (password.length > 0) {
                     if (password.length < 6) return json(res, 400, { error: "A nova senha deve ter pelo menos 6 caracteres." });
-                    const salt = crypto.randomBytes(16).toString("hex");
-                    const hash = crypto.scryptSync(password, salt, 64).toString("hex");
+                    salt = crypto.randomBytes(16).toString("hex");
+                    hash = crypto.scryptSync(password, salt, 64).toString("hex");
                     usersDb[existingIndex].salt = salt;
                     usersDb[existingIndex].hash = hash;
                 }
             }
 
+            // 1. Gravação no arquivo JSON de contingência
             fs.writeFileSync(USERS_FILE, JSON.stringify({ users: usersDb }, null, 2), { mode: 0o600 });
+
+            // 2. Gravação no banco PostgreSQL do Render
+            if (usePg) {
+                try {
+                    await pool.query(
+                        "INSERT INTO usuarios (id, username, name, role, hash, salt) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (username) DO UPDATE SET name = $3, role = $4, hash = $5, salt = $6",
+                        [crypto.randomUUID(), username, name, role, hash, salt]
+                    );
+                } catch (pgErr) {
+                    console.error("Erro ao persistir usuário no PostgreSQL:", pgErr);
+                }
+            }
+
             return json(res, 200, { ok: true, username, name, role });
         } catch (error) {
             return json(res, 500, { error: "Erro interno ao salvar usuário." });
         }
-    } 
+    }
     if (req.method === "GET" && url.pathname === "/api/me") { const session = requireSession(req, res); if (!session) return; return json(res, 200, { user: { username: session.username, role: session.role }, csrf: session.csrf }); }
     if (req.method === "POST" && url.pathname === "/api/logout") { const session = requireSession(req, res, { write: true }); if (!session) return; sessions.delete(session.token); setSessionCookie(res, "", 0); return json(res, 200, { ok: true }); }
     if (req.method === "POST" && url.pathname === "/api/change-password") {
@@ -248,7 +361,7 @@ async function handleApi(req, res, url) {
                 return json(res, 400, { error: "Preencha a senha atual e a nova senha." });
             }
 
-            const usersDb = readUsers();
+            const usersDb = await readUsers();
             const userIndex = usersDb.findIndex(u => u.username.toLowerCase() === session.username.toLowerCase());
 
             if (userIndex < 0) return json(res, 404, { error: "Usuário não encontrado." });
