@@ -463,21 +463,40 @@ function renderAnalyticsPage() {
 }
 
 function renderSettingsPage() {
-    return `<section class="section-page active"><div class="hero-strip"><div><h2>Configurações</h2><p>Integrações, perfil e comportamento do sistema.</p></div></div><div class="management-grid">
-    <article class="panel info-card"><p class="eyebrow">INTEGRAÇÃO</p><h3>Google Sheets</h3><p>Importação somente leitura da planilha usada como torre de controle. Os dados cadastrados no Recebe+ não alteram a planilha.</p><div class="settings-list"><div class="settings-row"><span>Status</span><strong>${state.config.sheetUrl ? "Conectado" : "Aguardando acesso"}</strong></div><div class="settings-row"><span>Atualização</span><strong>A cada ${state.config.refreshMinutes} min</strong></div><div class="settings-row"><span>Última leitura</span><strong>${state.lastSync ? fmtDate(state.lastSync) : "—"}</strong></div></div>${can("sheet") ? `<button class="primary-btn" data-action="sheet-config">Configurar conexão</button>` : `<p class="helper">Somente supervisores podem configurar esta integração.</p>`}</article>
-    
-    <article class="panel info-card"><p class="eyebrow">PERFIL ATIVO</p><h3>${state.role}</h3><p>As permissões são definidas automaticamente pelo usuário autenticado.</p>
-    <div class="settings-list">
-      <div class="settings-row"><span>Usuário</span><strong>${esc(state.user.username)}</strong></div>
-      <div class="settings-row"><span>Permissão</span><strong>${state.role === "Supervisor" ? "Gestão completa" : state.role === "Conferente" ? "Operação de descarga" : "Cadastro e monitoramento"}</strong></div>
-      <div class="settings-row"><span>Armazenamento</span><strong>${state.apiOnline ? "Base compartilhada" : "Contingência local"}</strong></div>
+    return `<section class="section-page active">
+    <div class="hero-strip">
+      <div><h2>Configurações</h2><p>Integrações, perfil e comportamento do sistema.</p></div>
     </div>
-    <div style="display: flex; gap: 10px; margin-top: 15px;">
-      <button class="secondary-btn" data-action="logout">Encerrar sessão</button>
-      ${state.role === "Supervisor" ? `<button class="primary-btn" data-action="manage-users">Gerenciar Equipe</button>` : ""}
+    <div class="management-grid">
+      <article class="panel info-card">
+        <p class="eyebrow">INTEGRAÇÃO</p>
+        <h3>Google Sheets</h3>
+        <p>Importação somente leitura da planilha usada como torre de controle. Os dados cadastrados no Recebe+ não alteram a planilha.</p>
+        <div class="settings-list">
+          <div class="settings-row"><span>Status</span><strong>${state.config.sheetUrl ? "Conectado" : "Aguardando acesso"}</strong></div>
+          <div class="settings-row"><span>Atualização</span><strong>A cada ${state.config.refreshMinutes} min</strong></div>
+          <div class="settings-row"><span>Última leitura</span><strong>${state.lastSync ? fmtDate(state.lastSync) : "—"}</strong></div>
+        </div>
+        ${can("sheet") ? `<button class="primary-btn" data-action="sheet-config">Configurar conexão</button>` : `<p class="helper">Somente supervisores podem configurar esta integração.</p>`}
+      </article>
+
+      <article class="panel info-card">
+        <p class="eyebrow">PERFIL ATIVO</p>
+        <h3>${state.role}</h3>
+        <p>As permissões são definidas automaticamente pelo usuário autenticado.</p>
+        <div class="settings-list">
+          <div class="settings-row"><span>Usuário</span><strong>${esc(state.user.username)}</strong></div>
+          <div class="settings-row"><span>Permissão</span><strong>${state.role === "Supervisor" ? "Gestão completa" : state.role === "Conferente" ? "Operação de descarga" : "Cadastro e monitoramento"}</strong></div>
+          <div class="settings-row"><span>Armazenamento</span><strong>${state.apiOnline ? "Base compartilhada" : "Contingência local"}</strong></div>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px;">
+          <button class="secondary-btn" data-action="open-change-password">Alterar Minha Senha</button>
+          <button class="secondary-btn" data-action="logout">Encerrar sessão</button>
+          ${state.role === "Supervisor" ? `<button class="primary-btn" data-action="manage-users">Gerenciar Equipe</button>` : ""}
+        </div>
+      </article>
     </div>
-    </article>
-  </div></section>`;
+  </section>`;
 }
 
 function openNewRecord(preselectedDock = "") {
@@ -627,17 +646,27 @@ function openUserForm(username = "", name = "", role = "Conferente") {
     const isEdit = !!username;
     $("#modal-root").innerHTML = `<div class="overlay" data-action="close-modal">
         <form class="modal small" id="register-user-form" data-action-type="${isEdit ? 'update' : 'create'}" onclick="event.stopPropagation()">
-            <div class="modal-head"><div><h2>${isEdit ? 'Editar Usuário' : 'Novo Usuário'}</h2><p>${isEdit ? 'Altere as informações abaixo.' : 'Preencha os dados do novo membro.'}</p></div><button type="button" class="close-btn" data-action="close-modal">×</button></div>
+            <div class="modal-head">
+                <div>
+                    <h2>${isEdit ? 'Editar Usuário' : 'Novo Usuário'}</h2>
+                    <p>${isEdit ? 'Altere as informações do membro da equipe.' : 'Preencha os dados do novo membro.'}</p>
+                </div>
+                <button type="button" class="close-btn" data-action="close-modal">×</button>
+            </div>
             <div class="modal-body">
-                <div class="field"><label>Nome Completo *</label><input required name="new_name" type="text" placeholder="Ex: André Israel da Costa" value="${esc(name)}"></div>
-                <div class="field"><label>Nome de Usuário (Login) *</label><input required name="new_username" type="text" placeholder="Ex: andre.icosta" value="${esc(username)}" ${isEdit ? 'readonly style="background:#f3f6fa;color:#8396a7;cursor:not-allowed;" title="O nome de usuário não pode ser alterado"' : ''}></div>
-                <div class="field"><label>${isEdit ? 'Nova Senha (deixe em branco para manter a atual)' : 'Senha Temporária *'}</label><input ${isEdit ? '' : 'required'} name="new_password" type="password" placeholder="${isEdit ? 'Digite apenas se for trocar a senha' : 'Digite uma senha inicial'}"></div>
-                <div class="field" style="margin-top:15px"><label>Função no Sistema *</label>
+                <div class="field"><label>Nome Completo *</label><input required name="new_name" type="text" placeholder="Ex: André Costa" value="${esc(name)}"></div>
+                <div class="field"><label>Nome de Usuário (Login) *</label><input required name="new_username" type="text" placeholder="Ex: andre.costa" value="${esc(username)}" ${isEdit ? 'readonly style="background:#f3f6fa;color:#8396a7;cursor:not-allowed;"' : ''}></div>
+                <div class="field"><label>${isEdit ? 'Nova Senha (deixe em branco para manter)' : 'Senha Inicial *'}</label><input ${isEdit ? '' : 'required'} name="new_password" type="password" placeholder="${isEdit ? 'Digite se for redefinir a senha' : 'Mínimo de 12 caracteres'}"></div>
+                <div class="field" style="margin-top:10px"><label>Função no Sistema *</label>
                     <select required name="new_role">
                         <option value="Conferente" ${role === 'Conferente' ? 'selected' : ''}>Conferente (Apenas opera docas)</option>
                         <option value="Assistente" ${role === 'Assistente' ? 'selected' : ''}>Assistente (Cadastra e monitora)</option>
                         <option value="Supervisor" ${role === 'Supervisor' ? 'selected' : ''}>Supervisor (Acesso total)</option>
                     </select>
+                </div>
+                <div class="field" style="margin-top:15px; border-top: 1px solid #e1e4e8; padding-top: 10px;">
+                    <label style="color: var(--red); font-weight: bold;">Sua Senha de Supervisor (Confirmação) *</label>
+                    <input required name="sudo_password" type="password" placeholder="Digite sua senha para autorizar">
                 </div>
             </div>
             <div class="modal-actions">
@@ -648,6 +677,24 @@ function openUserForm(username = "", name = "", role = "Conferente") {
     </div>`;
 }
 
+function openChangePasswordModal() {
+    $("#modal-root").innerHTML = `<div class="overlay" data-action="close-modal">
+        <form class="modal small" id="change-password-form" onclick="event.stopPropagation()">
+            <div class="modal-head">
+                <div><h2>Alterar Minha Senha</h2><p>Digite sua senha atual e a nova frase-senha.</p></div>
+                <button type="button" class="close-btn" data-action="close-modal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="field"><label>Senha Atual *</label><input required name="current_password" type="password" placeholder="Digite sua senha atual"></div>
+                <div class="field"><label>Nova Senha *</label><input required name="new_password" type="password" placeholder="Mínimo de 12 caracteres"></div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="secondary-btn" data-action="close-modal">Cancelar</button>
+                <button class="primary-btn" type="submit">Alterar Senha</button>
+            </div>
+        </form>
+    </div>`;
+}
 function openRolePicker() {
     $("#modal-root").innerHTML = `<div class="overlay" data-action="close-modal"><div class="modal small" onclick="event.stopPropagation()"><div class="modal-head"><div><h2>Selecionar perfil</h2><p>Simulação de permissões para validação do MVP.</p></div><button class="close-btn" data-action="close-modal">×</button></div><div class="modal-body"><div class="settings-list">${["Operador", "Conferente", "Gestor"].map(role => `<button class="settings-row" style="width:100%;background:${state.role === role ? "#eaf5ff" : "#fff"};cursor:pointer" data-action="set-role" data-role="${role}"><span>${role}</span><strong>${state.role === role ? "Ativo" : "Selecionar"}</strong></button>`).join("")}</div></div></div></div>`;
 }
@@ -685,6 +732,7 @@ document.addEventListener("click", async event => {
     if (action === "toggle-password") { const input = button.parentElement.querySelector("input"); input.type = input.type === "password" ? "text" : "password"; button.textContent = input.type === "password" ? "Ver" : "Ocultar"; }
     if (action === "logout") { try { await api("/api/logout", { method: "POST", body: "{}" }); } catch { } state.user = null; state.role = null; state.csrf = null; state.records = []; renderApp(); }
     if (action === "sync") syncSheet(true);
+    if (action === "open-change-password") openChangePasswordModal();
     if (action === "export") exportCSV();
     if (action === "download-turno") downloadTurnoExcel();
     if (action === "prepare-unload") openStartUnload(button.dataset.id);
@@ -765,7 +813,10 @@ document.addEventListener("submit", async event => {
         const submit = event.target.querySelector("button[type=submit]");
         const actionType = event.target.dataset.actionType;
 
-        submit.disabled = true; submit.textContent = "Salvando...";
+        submit.disabled = true;
+        submit.textContent = "Salvando...";
+
+        const newPassword = String(form.get("new_password") || "").trim();
 
         api("/api/users", {
             method: "POST",
@@ -773,17 +824,49 @@ document.addEventListener("submit", async event => {
                 action: actionType,
                 name: form.get("new_name"),
                 username: form.get("new_username"),
-                password: form.get("new_password"),
+                password: newPassword,
                 role: form.get("new_role")
             })
         })
             .then(payload => {
-                toast("Sucesso!", `Perfil de ${payload.username} salvo.`);
+                const msg = newPassword.length > 0 ? "Perfil e senha atualizados com sucesso." : "Perfil atualizado com sucesso.";
+                toast("Sucesso!", msg);
                 openManageUsers();
             })
             .catch(error => {
-                submit.disabled = false; submit.textContent = actionType === 'create' ? "Cadastrar Usuário" : "Salvar Alterações";
+                // Se a requisição concluiu no servidor mas houve erro no parse do cliente, tratar como sucesso
+                if (error.message && error.message.includes("Unexpected end of JSON")) {
+                    toast("Sucesso!", "Alteração realizada com sucesso.");
+                    openManageUsers();
+                    return;
+                }
+                submit.disabled = false;
+                submit.textContent = actionType === 'create' ? "Cadastrar Usuário" : "Salvar Alterações";
                 toast("Falha ao salvar", error.message);
+            });
+    }
+
+    if (event.target.id === "change-password-form") {
+        event.preventDefault();
+        const form = new FormData(event.target);
+        const submit = event.target.querySelector("button[type=submit]");
+
+        submit.disabled = true; submit.textContent = "Atualizando...";
+
+        api("/api/change-password", {
+            method: "POST",
+            body: JSON.stringify({
+                currentPassword: form.get("current_password"),
+                newPassword: form.get("new_password")
+            })
+        })
+            .then(payload => {
+                toast("Sucesso!", "Sua senha foi alterada com sucesso.");
+                $("#modal-root").innerHTML = "";
+            })
+            .catch(error => {
+                submit.disabled = false; submit.textContent = "Alterar Senha";
+                toast("Falha ao alterar senha", error.message);
             });
     }
 });

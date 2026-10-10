@@ -24,6 +24,68 @@ function verifyPassword(password,user) {
   try { const actual=crypto.scryptSync(String(password),user.salt,64);const expected=Buffer.from(user.hash,"hex");return actual.length===expected.length&&crypto.timingSafeEqual(actual,expected); }
   catch { return false; }
 }
+// Lista de senhas comuns/fracas a proibir
+const COMMON_PASSWORDS = new Set([
+    "123456", "12345678", "123456789", "password", "senha123", "admin123",
+    "recebeplus", "mudar123", "1234567890", "qwertyuiop", "supervisorsenha"
+]);
+
+function validatePasswordStrength(password) {
+    const pwd = String(password || "");
+
+    if (pwd.length < 12) {
+        throw new Error("A senha deve possuir no mínimo 12 caracteres.");
+    }
+
+    if (COMMON_PASSWORDS.has(pwd.toLowerCase().trim())) {
+        throw new Error("A senha escolhida é muito comum e insegura. Escolha uma frase-senha mais longa.");
+    }
+
+    return true;
+}
+function ensureInitialUsersDb() {
+    fs.mkdirSync(path.dirname(USERS_FILE), { recursive: true });
+
+    let users = [];
+    try {
+        if (fs.existsSync(USERS_FILE)) {
+            const content = fs.readFileSync(USERS_FILE, "utf8");
+            const parsed = JSON.parse(content);
+            if (Array.isArray(parsed.users)) users = parsed.users;
+        }
+    } catch (err) {
+        console.warn("Arquivo users.json corrompido ou ausente. Reinicializando base de usuários.");
+    }
+
+    const hasSupervisor = users.some(u => u.role === "Supervisor");
+
+    if (!hasSupervisor || users.length === 0) {
+        console.warn("⚠️ Nenhum supervisor encontrado. Criando conta inicial de administrador...");
+
+        const initialAdminPassword = process.env.ADMIN_INITIAL_PASSWORD || crypto.randomBytes(12).toString("hex") + "A1!";
+        const salt = crypto.randomBytes(16).toString("hex");
+        const hash = crypto.scryptSync(initialAdminPassword, salt, 64).toString("hex");
+
+        const adminUser = {
+            username: "admin",
+            name: "Administrador do Sistema",
+            role: "Supervisor",
+            salt,
+            hash,
+            createdAt: new Date().toISOString()
+        };
+
+        users.unshift(adminUser);
+        fs.writeFileSync(USERS_FILE, JSON.stringify({ users }, null, 2), { mode: 0o600 });
+
+        console.log(`✅ Administrador inicial criado com sucesso:
+   Usuário: admin
+   Senha:   ${initialAdminPassword}
+⚠️ ALERTA: Guarde esta senha e altere-a após o primeiro login!`);
+    }
+}
+
+ensureInitialUsersDb();
 function parseCookies(req) {
   return Object.fromEntries(String(req.headers.cookie||"").split(";").map(part=>part.trim().split(/=(.*)/s).slice(0,2)).filter(([key])=>key).map(([key,value])=>[key,decodeURIComponent(value||"")]));
 }
@@ -114,17 +176,17 @@ async function handleApi(req, res, url) {
         const users = readUsers().map(u => ({ username: u.username, name: u.name || "", role: u.role }));
         return json(res, 200, { users });
     }
-
     if (req.method === "POST" && url.pathname === "/api/users") {
-        const session = requireSession(req, res, { write: true }); if (!session) return;
+        const session = requireSession(req, res, { write: true });
+        if (!session) return;
         if (session.role !== "Supervisor") return json(res, 403, { error: "Apenas supervisores podem gerenciar a equipe." });
 
         try {
             const input = await readBody(req);
-            const action = input.action; // Saber se é 'create' (novo) ou 'update' (editar)
+            const action = input.action;
             const username = cleanText(input.username, 60);
             const name = cleanText(input.name, 100);
-            const password = String(input.password || "");
+            const password = String(input.password || "").trim();
             const role = cleanText(input.role, 20);
 
             if (!username || !name || !["Conferente", "Assistente", "Supervisor"].includes(role)) {
@@ -136,7 +198,7 @@ async function handleApi(req, res, url) {
 
             if (action === "create") {
                 if (existingIndex >= 0) return json(res, 400, { error: "Este nome de usuário (login) já existe." });
-                if (password.length < 4) return json(res, 400, { error: "A senha deve ter pelo menos 4 caracteres." });
+                if (password.length < 6) return json(res, 400, { error: "A senha deve ter pelo menos 6 caracteres." });
 
                 const salt = crypto.randomBytes(16).toString("hex");
                 const hash = crypto.scryptSync(password, salt, 64).toString("hex");
@@ -145,12 +207,20 @@ async function handleApi(req, res, url) {
             } else if (action === "update") {
                 if (existingIndex < 0) return json(res, 404, { error: "Usuário não encontrado." });
 
-                // Atualiza o nome e o perfil
+                const currentUser = usersDb[existingIndex];
+                if (currentUser.role === "Supervisor" && role !== "Supervisor") {
+                    const totalSupervisors = usersDb.filter(u => u.role === "Supervisor").length;
+                    if (totalSupervisors <= 1) {
+                        return json(res, 400, { error: "Não é possível rebaixar o único Supervisor existente." });
+                    }
+                }
+
                 usersDb[existingIndex].name = name;
                 usersDb[existingIndex].role = role;
 
-                // Só atualiza a senha se o supervisor digitou uma senha nova
-                if (password.length >= 4) {
+                // Só atualiza a senha se uma nova senha for fornecida
+                if (password.length > 0) {
+                    if (password.length < 6) return json(res, 400, { error: "A nova senha deve ter pelo menos 6 caracteres." });
                     const salt = crypto.randomBytes(16).toString("hex");
                     const hash = crypto.scryptSync(password, salt, 64).toString("hex");
                     usersDb[existingIndex].salt = salt;
@@ -158,15 +228,54 @@ async function handleApi(req, res, url) {
                 }
             }
 
-            fs.writeFileSync(USERS_FILE, JSON.stringify({ users: usersDb }, null, 2));
+            fs.writeFileSync(USERS_FILE, JSON.stringify({ users: usersDb }, null, 2), { mode: 0o600 });
             return json(res, 200, { ok: true, username, name, role });
         } catch (error) {
             return json(res, 500, { error: "Erro interno ao salvar usuário." });
         }
-    }
+    } 
     if (req.method === "GET" && url.pathname === "/api/me") { const session = requireSession(req, res); if (!session) return; return json(res, 200, { user: { username: session.username, role: session.role }, csrf: session.csrf }); }
     if (req.method === "POST" && url.pathname === "/api/logout") { const session = requireSession(req, res, { write: true }); if (!session) return; sessions.delete(session.token); setSessionCookie(res, "", 0); return json(res, 200, { ok: true }); }
+    if (req.method === "POST" && url.pathname === "/api/change-password") {
+        const session = requireSession(req, res, { write: true });
+        if (!session) return;
 
+        try {
+            const input = await readBody(req);
+            const { currentPassword, newPassword } = input;
+
+            if (!currentPassword || !newPassword) {
+                return json(res, 400, { error: "Preencha a senha atual e a nova senha." });
+            }
+
+            const usersDb = readUsers();
+            const userIndex = usersDb.findIndex(u => u.username.toLowerCase() === session.username.toLowerCase());
+
+            if (userIndex < 0) return json(res, 404, { error: "Usuário não encontrado." });
+
+            if (!verifyPassword(currentPassword, usersDb[userIndex])) {
+                return json(res, 401, { error: "A senha atual informada está incorreta." });
+            }
+
+            validatePasswordStrength(newPassword);
+
+            const salt = crypto.randomBytes(16).toString("hex");
+            const hash = crypto.scryptSync(newPassword, salt, 64).toString("hex");
+
+            usersDb[userIndex].salt = salt;
+            usersDb[userIndex].hash = hash;
+
+            fs.writeFileSync(USERS_FILE, JSON.stringify({ users: usersDb }, null, 2), { mode: 0o600 });
+
+            const db = readDb();
+            auditUserManagement(db, "Redefinição de Senha Própria", session.role, session.username);
+            writeDb(db);
+
+            return json(res, 200, { ok: true, message: "Senha alterada com sucesso." });
+        } catch (error) {
+            return json(res, 400, { error: error.message });
+        }
+    }
     const write = req.method !== "GET"; const session = requireSession(req, res, { write }); if (!session) return;
     const role = session.role;
     if (req.method === "GET" && url.pathname === "/api/records") { const db = readDb(); return json(res, 200, { records: db.records, updatedAt: new Date().toISOString() }); }
