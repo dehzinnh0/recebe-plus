@@ -1,53 +1,26 @@
 {
   "users": [
     {
-      "username": "Conferente.1",
-      "role": "Conferente",
-      "salt": "68e862ce264b9f92dfe86d6a85be8457",
-      "hash": "ad0b8dc134d8142e2fc386403d55bcac4202177c67137ac97790c7f53e8f6e5432311a5a0c24d32543e61cf907e8146d3d80d6386e5672b96deabb68cfa2fa03"
-    },
-    {
-      "username": "Conferente.2",
-      "role": "Conferente",
-      "salt": "dbfba4ebc1785e981e6a0bdfe95abc8b",
-      "hash": "d327bdffa01eb6dfdf0498b091c14704496f5f73399aab77753a575dbd495683ad38b300e4a08f80066e1183df6b891e12e81405dcbb3ebe755d226e2fcb4444"
-    },
-    {
-      "username": "Assistente.1",
-      "role": "Assistente",
-      "salt": "8d4348c5382a79485d0f884b96532ec9",
-      "hash": "f7336e054223d5d9a702501e4a83a4cb029b5376009540cc80f5a72573316d0c5b753bee05ec3026e17d3775ecab27d1579e133878a7b0db10709e6466f37a1e"
-    },
-    {
-      "username": "Assistente.2",
-      "role": "Assistente",
-      "salt": "97a9f2569087271f766b4628018ba54c",
-      "hash": "da635321126f9ccf2789c7b92da8e64cc900b4f8343c6f69e90328aac1d0e9d73724e9aafad207cefab381d707ba467eb99fcace8b613e168bc4cc1ae254cb9b"
-    },
-    {
-      "username": "Supervisor.1",
+      "username": "admin",
+      "name": "Administrador do Sistema",
       "role": "Supervisor",
-      "salt": "587403ba0cecc59b6f5db47c8767f65f",
-      "hash": "c8455150c1a5b47daa3f216cc48cc9b3a672301bd63921c4e3af1e26d4c0b070f9f7b5183c097ad78164d24462bb3f180687573dca1e4627c6ec344910f6b14e"
-    },
-    {
-      "username": "Supervisor.2",
-      "role": "Supervisor",
-      "salt": "95ecdde59250c0145e62baf89a5bfc8b",
-      "hash": "f3216cc25b01edd5ad7877dea013764c22cb42d2b44b558a4fb64a2e635d1015b22f8ab5b5766a60f949896f943f1b7419f05ee9e71eaf7a31d23d374f4ca338"
-    },
-    {
-      "username": "Supervisor.3",
-      "role": "Supervisor",
-      "salt": "9acff675fd787771b6330ec176b31527",
-      "hash": "9d47536c7981cb80a80a0cfcdf9c895801915e1b696958d1b143aeebb0f28ed2e06cb9e753f264b545b5f9868ed2d1fef419dbb20b3aff895020a4cbb2715240"
+      "salt": "1a5c5ace0d02c6bd266371af7a2134e4",
+      "hash": "e293d591f4afd5e8d1fa627f386d98947142dc65383bc838f6ae77a9a296a6f7eddbdec33004f42a5c0a7d837081199d7eeb888d66d98255f160ab7296f38e3e",
+      "createdAt": "2026-10-10T18:36:18.384Z"
     },
     {
       "username": "andre.icosta",
       "name": "André Israel da Costa",
       "role": "Conferente",
-      "salt": "9887fb908c7031d2234930f85ba5bd3c",
-      "hash": "b2d1c7f93cb43cdbf2ebc49bda3c075ea3823a6804f22e7c04b4b04e342060d3f145185b210d08f43e5ded286781d3760a8ed3601e8ab29412c0cb7bfb8ad22b"
+      "salt": "408bbce01c8e82dc95535d6743de7f5f",
+      "hash": "6aadd826a5e94409a1b49b20868f1637d74f81ed071657aca445f8a64545665d03f8ba60e92d64d6abf1ecf5e6d55b3ca6cdd786852597c04b4b18f66b160926"
+    },
+    {
+      "username": "assistente.teste",
+      "name": "Assistente Teste",
+      "role": "Assistente",
+      "salt": "2bc95372872389a44cdbc485399fd2ee",
+      "hash": "bcfdcf074409e3f483d479460b2bd7b6879c43ae7f259f52bf50ee7aac776ce6bc847bc6a02b36fa778cbf7254b3255c7ee21acd0a4b0383341d0aa26da492be"
     }
   ]
 }
