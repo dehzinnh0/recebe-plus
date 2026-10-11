@@ -190,7 +190,7 @@ function registerFailure(ip) {
 // 3. PERSISTÊNCIA DE DADOS E AUDITORIA (PG / JSON)
 // ==========================================
 
-// 3.1 Inicialização das Tabelas no PostgreSQL
+// 3.1 Inicialização das Tabelas no PostgreSQL (incluindo a tabela insumos_recebimento)
 async function initDb() {
     if (!usePg) return;
     const client = await pool.connect();
@@ -225,6 +225,17 @@ async function initDb() {
         insumo_obs TEXT,
         insumos_lista JSONB,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- 3.1a Tabela Normalizada de Insumos por Recebimento (Relacionamento 1:N)
+      CREATE TABLE IF NOT EXISTS insumos_recebimento (
+        id VARCHAR(36) PRIMARY KEY,
+        recebimento_id VARCHAR(36) NOT NULL REFERENCES recebimentos(id) ON DELETE CASCADE,
+        tipo_insumo VARCHAR(50) NOT NULL,
+        quantidade INT NOT NULL CHECK (quantidade > 0),
+        condicao VARCHAR(30) DEFAULT '',
+        observacao TEXT,
+        criado_em TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
       CREATE TABLE IF NOT EXISTS auditoria (
@@ -374,7 +385,7 @@ async function createRecordDb(record, role) {
     writeDb(db);
 }
 
-// 3.3b Transições de Status e Insumos da Descarga (Híbrida: PostgreSQL / JSON)
+// 3.3b Transições de Status e Gravação de Insumos (Híbrida: PostgreSQL / JSON)
 async function transitionRecordDb(id, action, input, role) {
     const allowed = { start: "Em descarga", finish: "Concluído", issue: "Em Atraso" };
     const targetStatus = allowed[action];
@@ -418,6 +429,35 @@ async function transitionRecordDb(id, action, input, role) {
                     input.insumo_obs || "",
                     input.insumos ? (typeof input.insumos === "string" ? input.insumos : JSON.stringify(input.insumos)) : null
                 );
+
+                // 3.3c Grava itens individualizados na tabela relacional 'insumos_recebimento'
+                try {
+                    let insumosArray = [];
+                    if (typeof input.insumos === "string") {
+                        insumosArray = JSON.parse(input.insumos);
+                    } else if (Array.isArray(input.insumos)) {
+                        insumosArray = input.insumos;
+                    }
+
+                    for (const item of insumosArray) {
+                        const qtd = Number(item.qtd || item.quantidade || 0);
+                        if (qtd > 0 && item.tipo) {
+                            await pool.query(`
+                                INSERT INTO insumos_recebimento (id, recebimento_id, tipo_insumo, quantidade, condicao, observacao)
+                                VALUES ($1, $2, $3, $4, $5, $6)
+                            `, [
+                                crypto.randomUUID(),
+                                id,
+                                cleanText(item.tipo, 50),
+                                qtd,
+                                cleanText(item.status || item.condicao, 30),
+                                cleanText(item.obs || item.observacao, 255)
+                            ]);
+                        }
+                    }
+                } catch (insumoErr) {
+                    console.error("Erro ao gravar insumos relacionais:", insumoErr);
+                }
             }
         }
 
@@ -746,20 +786,20 @@ async function handleApi(req, res, url) {
     if (!session) return;
     const role = session.role;
 
-    // 5.6 Listagem de Recebimentos (Consulta no PostgreSQL)
+    // 5.6 Listagem de Recebimentos
     if (req.method === "GET" && url.pathname === "/api/records") {
         const db = await readDb();
         return json(res, 200, { records: db.records, updatedAt: new Date().toISOString() });
     }
 
-    // 5.7 Listagem do Histórico de Auditoria (Consulta no PostgreSQL)
+    // 5.7 Listagem do Histórico de Auditoria
     if (req.method === "GET" && url.pathname === "/api/audit") {
         if (role !== "Supervisor") return json(res, 403, { error: "Acesso restrito ao supervisor" });
         const db = await readDb();
         return json(res, 200, { audit: db.audit.slice(0, 100) });
     }
 
-    // 5.8 Cadastro de Novo Recebimento (Inclusão no PostgreSQL)
+    // 5.8 Cadastro de Novo Recebimento
     if (req.method === "POST" && url.pathname === "/api/records") {
         if (!["Conferente", "Assistente", "Supervisor"].includes(role)) return json(res, 403, { error: "Perfil sem permissão" });
         try {
@@ -772,7 +812,7 @@ async function handleApi(req, res, url) {
         }
     }
 
-    // 5.9 Alteração de Status e Transições de Descarga (Atualização no PostgreSQL)
+    // 5.9 Alteração de Status e Transições de Descarga
     const match = url.pathname.match(/^\/api\/records\/([^/]+)\/transition$/);
     if (req.method === "PATCH" && match) {
         if (!["Conferente", "Supervisor"].includes(role)) return json(res, 403, { error: "Somente conferentes e supervisores podem alterar a descarga" });
@@ -784,6 +824,34 @@ async function handleApi(req, res, url) {
         } catch (error) {
             return json(res, 400, { error: error.message });
         }
+    }
+
+    // 5.10 Rota de Relatório Analítico de Insumos Devolvidos
+    if (req.method === "GET" && url.pathname === "/api/insumos") {
+        if (usePg) {
+            try {
+                const resInsumos = await pool.query(`
+                    SELECT 
+                        i.id,
+                        i.tipo_insumo,
+                        i.quantidade,
+                        i.condicao,
+                        i.observacao,
+                        i.criado_em,
+                        r.origem,
+                        r.placa,
+                        r.conferente
+                    FROM insumos_recebimento i
+                    JOIN recebimentos r ON r.id = i.recebimento_id
+                    ORDER BY i.criado_em DESC
+                `);
+                return json(res, 200, { insumos: resInsumos.rows });
+            } catch (err) {
+                console.error("Erro ao consultar insumos no PostgreSQL:", err);
+                return json(res, 500, { error: "Erro ao consultar relatório de insumos." });
+            }
+        }
+        return json(res, 200, { insumos: [] });
     }
 }
 
