@@ -190,7 +190,7 @@ function registerFailure(ip) {
 // 3. PERSISTÊNCIA DE DADOS E AUDITORIA (PG / JSON)
 // ==========================================
 
-// 3.1 Inicialização das Tabelas no PostgreSQL (incluindo foto_url na tabela de insumos)
+// 3.1 Inicialização das Tabelas no PostgreSQL (incluindo a tabela insumos_recebimento)
 async function initDb() {
     if (!usePg) return;
     const client = await pool.connect();
@@ -227,7 +227,7 @@ async function initDb() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
-      -- 3.1a Tabela Normalizada de Insumos com suporte a Foto/Evidência
+      -- 3.1a Tabela Normalizada de Insumos por Recebimento (Relacionamento 1:N)
       CREATE TABLE IF NOT EXISTS insumos_recebimento (
         id VARCHAR(36) PRIMARY KEY,
         recebimento_id VARCHAR(36) NOT NULL REFERENCES recebimentos(id) ON DELETE CASCADE,
@@ -235,7 +235,6 @@ async function initDb() {
         quantidade INT NOT NULL CHECK (quantidade > 0),
         condicao VARCHAR(30) DEFAULT '',
         observacao TEXT,
-        foto_url TEXT,
         criado_em TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -355,7 +354,7 @@ async function readDb() {
     }
 }
 
-// 3.3a Criação de Novo Recebimento
+// 3.3a Criação de Novo Recebimento (Híbrida: PostgreSQL / JSON)
 async function createRecordDb(record, role) {
     if (usePg) {
         await pool.query(`
@@ -386,7 +385,7 @@ async function createRecordDb(record, role) {
     writeDb(db);
 }
 
-// 3.3b Transições de Status e Gravação de Insumos com suporte a Foto (Google Drive)
+// 3.3b Transições de Status e Gravação de Insumos (Híbrida: PostgreSQL / JSON)
 async function transitionRecordDb(id, action, input, role) {
     const allowed = { start: "Em descarga", finish: "Concluído", issue: "Em Atraso" };
     const targetStatus = allowed[action];
@@ -444,16 +443,15 @@ async function transitionRecordDb(id, action, input, role) {
                         const qtd = Number(item.qtd || item.quantidade || 0);
                         if (qtd > 0 && item.tipo) {
                             await pool.query(`
-                                INSERT INTO insumos_recebimento (id, recebimento_id, tipo_insumo, quantidade, condicao, observacao, foto_url)
-                                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                                INSERT INTO insumos_recebimento (id, recebimento_id, tipo_insumo, quantidade, condicao, observacao)
+                                VALUES ($1, $2, $3, $4, $5, $6)
                             `, [
                                 crypto.randomUUID(),
                                 id,
                                 cleanText(item.tipo, 50),
                                 qtd,
                                 cleanText(item.status || item.condicao, 30),
-                                cleanText(item.obs || item.observacao, 255),
-                                cleanText(item.foto_url || input.foto_url || "", 500)
+                                cleanText(item.obs || item.observacao, 255)
                             ]);
                         }
                     }
@@ -828,54 +826,25 @@ async function handleApi(req, res, url) {
         }
     }
 
-    // 5.10 Rota de Evidências de Insumos com Filtros por Data, Origem e Conferente
+    // 5.10 Rota de Relatório Analítico de Insumos Devolvidos
     if (req.method === "GET" && url.pathname === "/api/insumos") {
         if (usePg) {
             try {
-                const dataInicio = url.searchParams.get("data_inicio");
-                const dataFim = url.searchParams.get("data_fim");
-                const origem = url.searchParams.get("origem");
-                const conferente = url.searchParams.get("conferente");
-
-                let querySQL = `
+                const resInsumos = await pool.query(`
                     SELECT 
                         i.id,
                         i.tipo_insumo,
                         i.quantidade,
                         i.condicao,
                         i.observacao,
-                        i.foto_url,
                         i.criado_em,
                         r.origem,
                         r.placa,
                         r.conferente
                     FROM insumos_recebimento i
                     JOIN recebimentos r ON r.id = i.recebimento_id
-                    WHERE 1=1
-                `;
-                const params = [];
-                let idx = 1;
-
-                if (dataInicio) {
-                    querySQL += ` AND i.criado_em >= $${idx++}`;
-                    params.push(dataInicio);
-                }
-                if (dataFim) {
-                    querySQL += ` AND i.criado_em <= $${idx++}`;
-                    params.push(dataFim);
-                }
-                if (origem) {
-                    querySQL += ` AND LOWER(r.origem) LIKE $${idx++}`;
-                    params.push(`%${origem.toLowerCase().trim()}%`);
-                }
-                if (conferente) {
-                    querySQL += ` AND LOWER(r.conferente) LIKE $${idx++}`;
-                    params.push(`%${conferente.toLowerCase().trim()}%`);
-                }
-
-                querySQL += ` ORDER BY i.criado_em DESC`;
-
-                const resInsumos = await pool.query(querySQL, params);
+                    ORDER BY i.criado_em DESC
+                `);
                 return json(res, 200, { insumos: resInsumos.rows });
             } catch (err) {
                 console.error("Erro ao consultar insumos no PostgreSQL:", err);
