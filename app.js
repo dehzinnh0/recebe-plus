@@ -529,34 +529,40 @@ function openStartUnload(id) {
   </form></div>`;
 }
 // Molde dinâmico para carregar múltiplos insumos
-function getInsumoTemplate(index = 0) {
+function getInsumoTemplate(index) {
     return `
-    <div class="form-grid insumo-item" style="border: 1px solid #e1e4e8; padding: 15px; border-radius: 8px; position: relative; margin-bottom: 12px; background: #fff;">
-        ${index > 0 ? `<button type="button" data-action="none" onclick="this.closest('.insumo-item').remove()" style="position: absolute; right: 10px; top: 10px; background: none; border: none; font-size: 20px; color: #ff4d4f; cursor: pointer; line-height: 1;">×</button>` : ""}
-        <div class="field">
-            <label>Tipo de Insumo *</label>
-            <select name="tipo_insumo" onchange="const wrap = this.closest('.insumo-item').querySelector('.status-insumo-wrap'); if(this.value==='Gaylords'||this.value==='Bags') wrap.style.display='block'; else wrap.style.display='none';">
-               <option value="Gaylords">Gaylords</option>
-               <option value="Pallets">Pallets</option>
-               <option value="Bags">Bags</option>
-               <option value="Strech">Strech</option>
-               <option value="Outros">Outros</option>
-            </select>
+    <div class="insumo-item" style="border: 1px solid #e0e6ed; padding: 12px; border-radius: 8px; margin-bottom: 12px; background: #fdfdfd;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <strong style="font-size: 11px; color: var(--ink);">Insumo #${index + 1}</strong>
+            ${index > 0 ? `<button type="button" onclick="this.closest('.insumo-item').remove()" style="background:none; border:none; color:var(--red); font-size:16px; cursor:pointer;" title="Remover">×</button>` : ''}
         </div>
-        <div class="field">
-            <label>Quantidade *</label>
-            <input type="number" name="qtd_insumo" min="1" placeholder="Ex: 12" required>
-        </div>
-        <div class="field full status-insumo-wrap" style="display:block;">
-            <label>Condição (Bags/Gaylords)</label>
-            <select name="status_insumo">
-               <option value="Completas">Completas</option>
-               <option value="Incompletas">Incompletas</option>
-            </select>
-        </div>
-        <div class="field full">
-            <label>Observação</label>
-            <input type="text" name="obs_insumo" placeholder="Detalhes (Opcional)">
+        <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 8px;">
+            <div class="field">
+                <label>Tipo *</label>
+                <select name="tipo_insumo" required>
+                    <option value="">Selecione</option>
+                    <option value="Gaylords">Gaylords</option>
+                    <option value="Pallets">Pallets</option>
+                    <option value="Bags">Bags</option>
+                    <option value="Strech">Strech</option>
+                    <option value="Outros">Outros</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>Quantidade *</label>
+                <input type="number" min="1" name="qtd_insumo" required placeholder="Qtd">
+            </div>
+            <div class="field full status-insumo-wrap">
+                <label>Condição</label>
+                <select name="status_insumo">
+                    <option value="Completas">Completas / Íntegras</option>
+                    <option value="Incompletas">Incompletas / Danificadas</option>
+                </select>
+            </div>
+            <div class="field full">
+                <label>Observação</label>
+                <input type="text" name="obs_insumo" placeholder="Detalhes (opcional)" maxlength="120">
+            </div>
         </div>
     </div>`;
 }
@@ -777,33 +783,34 @@ document.addEventListener("submit", async event => {
         }
     }
     if (event.target.id === "finish-unload-form") {
-        event.preventDefault();
-        const id = event.target.dataset.id;
-        const form = new FormData(event.target);
+    event.preventDefault();
+    const id = event.target.dataset.id;
+    const form = new FormData(event.target);
 
-        const payload = { status: "Concluído", fim: new Date().toISOString() };
+    const payload = { 
+        action: "finish",
+        status: "Concluído", 
+        fim: new Date().toISOString() 
+    };
 
-        if (form.get("tem_insumo") === "sim") {
-            // Varre a tela pegando todos os blocos de insumo que o usuário criou
-            const items = [...event.target.querySelectorAll('.insumo-item')];
-            const insumos = items.map(item => ({
-                tipo: item.querySelector('[name="tipo_insumo"]').value,
-                qtd: item.querySelector('[name="qtd_insumo"]').value,
-                status: item.querySelector('.status-insumo-wrap').style.display !== 'none' ? item.querySelector('[name="status_insumo"]').value : "",
-                obs: item.querySelector('[name="obs_insumo"]').value
-            }));
+    if (form.get("tem_insumo") === "sim") {
+        const items = [...event.target.querySelectorAll('.insumo-item')];
+        const insumosList = items.map(item => ({
+            tipo: item.querySelector('[name="tipo_insumo"]').value,
+            qtd: Number(item.querySelector('[name="qtd_insumo"]').value || 0),
+            status: item.querySelector('[name="status_insumo"]')?.value || "",
+            obs: item.querySelector('[name="obs_insumo"]')?.value || ""
+        })).filter(i => i.tipo && i.qtd > 0);
 
-            payload.insumos = JSON.stringify(insumos); // Envia o pacote completo para o servidor
-
-            // Cria um resumo bonito para aparecer na tabela do Excel (ex: "12x Gaylords, 4x Pallets")
-            payload.insumo_tipo = insumos.map(i => `${i.qtd}x ${i.tipo}`).join(", ");
-            payload.insumo_qtd = insumos.reduce((acc, curr) => acc + Number(curr.qtd || 0), 0);
-        }
-
-        if (await updateRecord(id, "finish", payload, payload)) {
-            toast("Descarga finalizada", "Insumos registrados e painel atualizado.");
-        }
+        payload.insumos = insumosList;
+        payload.insumo_tipo = insumosList.map(i => `${i.qtd}x ${i.tipo}`).join(", ");
+        payload.insumo_qtd = insumosList.reduce((acc, curr) => acc + curr.qtd, 0);
     }
+
+    if (await updateRecord(id, "finish", payload, payload)) {
+        toast("Descarga finalizada", "Insumos registrados com sucesso no PostgreSQL.");
+    }
+}
     if (event.target.id === "sheet-form") {
         event.preventDefault(); const form = new FormData(event.target); state.config.sheetUrl = String(form.get("sheetUrl") || "").trim(); state.config.refreshMinutes = Number(form.get("refreshMinutes") || 5); saveConfig(); $("#modal-root").innerHTML = ""; syncSheet(true); scheduleSync();
     }
