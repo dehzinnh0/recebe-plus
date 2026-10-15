@@ -27,6 +27,10 @@ const loginAttempts = new Map();
 const SESSION_TTL = 8 * 60 * 60 * 1000;
 const PUBLIC_FILES = new Set(["index.html", "styles.css", "app.js", "manifest.json", "service-worker.js", "icon.svg"]);
 
+// Optional: allowed origins for CORS when frontend and backend are on different origins.
+// Define ALLOWED_ORIGINS as a comma-separated list (ex: https://app.example.com) in env for cross-origin deployments.
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(",").map(s => s.trim()).filter(Boolean) : null;
+
 // 1.3 Mapeamento de Mime Types para arquivos estáticos
 const MIME = {
     ".html": "text/html; charset=utf-8",
@@ -124,10 +128,7 @@ function ensureInitialUsersDb() {
         users.unshift(adminUser);
         fs.writeFileSync(USERS_FILE, JSON.stringify({ users }, null, 2), { mode: 0o600 });
 
-        console.log(`✅ Administrador inicial criado com sucesso:
-   Usuário: admin
-   Senha:   ${initialAdminPassword}
-⚠️ ALERTA: Guarde esta senha e altere-a após o primeiro login!`);
+        console.log(`✅ Administrador inicial criado com sucesso:\n   Usuário: admin\n   Senha:   ${initialAdminPassword}\n ⚠️ ALERTA: Guarde esta senha e altere-a após o primeiro login!`);
     }
 }
 ensureInitialUsersDb();
@@ -154,7 +155,8 @@ function getSession(req) {
 
 function setSessionCookie(res, token, maxAge = SESSION_TTL / 1000) {
     const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
-    res.setHeader("Set-Cookie", `recebe_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}${secure}`);
+    // Use SameSite=Lax to balance security and cross-origin compatibility for common deployments.
+    res.setHeader("Set-Cookie", `recebe_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secure}`);
 }
 
 function requireSession(req, res, { write = false } = {}) {
@@ -278,11 +280,11 @@ function nowAt(hour, minute = 0, dayOffset = 0) {
 
 function seed() {
     return [
-        { id: "D-101", data: nowAt(7, 20), origem: "CD Guarulhos", doca: "3", motorista: "Carlos Mendes", placa: "RFG-8J21", volumetria: 1860, inicio: nowAt(7, 42), fim: nowAt(8, 31), sla: 60, conferente: "Ana Souza", status: "Concluído", source: "server" },
-        { id: "D-102", data: nowAt(8, 10), origem: "Hub Campinas", doca: "5", motorista: "João Ribeiro", placa: "GHT-4C07", volumetria: 2430, inicio: nowAt(8, 28), fim: null, sla: 75, conferente: "Marcos Lima", status: "Em descarga", source: "server" },
-        { id: "D-103", data: nowAt(9), origem: "CD Extrema", doca: "2", motorista: "Paulo Nunes", placa: "BXR-1D94", volumetria: 0, inicio: null, fim: null, sla: 45, conferente: "—", status: "Aguardando", source: "server" },
-        { id: "D-104", data: nowAt(9, 35), origem: "Hub Sorocaba", doca: "8", motorista: "Rafael Alves", placa: "TJK-6F13", volumetria: 0, inicio: null, fim: null, sla: 90, conferente: "Beatriz Reis", status: "Em Trânsito", source: "server" },
-        { id: "D-105", data: nowAt(10, 20), origem: "CD Louveira", doca: "1", motorista: "Diego Martins", placa: "KLM-9A42", volumetria: 0, inicio: null, fim: null, sla: 55, conferente: "—", status: "Em Trânsito", source: "server" }
+        { id: "D-101", data: nowAt(7, 20), origem: "CD Guarulhos", doca: "3", motorista: "Carlos Mendes", placa: "RFG-8J21", volumetria: 1860, inicio: nowAt(7, 42), fim: nowAt(8, 31), sla: 60, conferente: "—", status: "Concluído" },
+        { id: "D-102", data: nowAt(8, 10), origem: "Hub Campinas", doca: "5", motorista: "João Ribeiro", placa: "GHT-4C07", volumetria: 2430, inicio: nowAt(8, 28), fim: null, sla: 75, conferente: "—", status: "Em descarga" },
+        { id: "D-103", data: nowAt(9), origem: "CD Extrema", doca: "2", motorista: "Paulo Nunes", placa: "BXR-1D94", volumetria: 0, inicio: null, fim: null, sla: 45, conferente: "—", status: "Aguardando" },
+        { id: "D-104", data: nowAt(9, 35), origem: "Hub Sorocaba", doca: "8", motorista: "Rafael Alves", placa: "TJK-6F13", volumetria: 0, inicio: null, fim: null, sla: 90, conferente: "Beatriz Reis", status: "Aguardando" },
+        { id: "D-105", data: nowAt(10, 20), origem: "CD Louveira", doca: "1", motorista: "Diego Martins", placa: "KLM-9A42", volumetria: 0, inicio: null, fim: null, sla: 55, conferente: "—", status: "Em Trânsito" }
     ];
 }
 
@@ -637,6 +639,7 @@ async function handleApi(req, res, url) {
             setSessionCookie(res, token);
             return json(res, 200, { user: { username: user.username, role: user.role }, csrf });
         } catch (error) {
+            console.error("Erro no login:", error && error.stack ? error.stack : error);
             return json(res, 400, { error: "Não foi possível processar o login" });
         }
     }
@@ -720,6 +723,7 @@ async function handleApi(req, res, url) {
 
             return json(res, 200, { ok: true, username, name, role });
         } catch (error) {
+            console.error("Erro ao salvar usuário:", error && error.stack ? error.stack : error);
             return json(res, 500, { error: "Erro interno ao salvar usuário." });
         }
     }
@@ -903,7 +907,7 @@ function serveStatic(req, res, url) {
             "X-Content-Type-Options": "nosniff",
             "Referrer-Policy": "same-origin",
             "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-            "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://docs.google.com https://docs.googleusercontent.com; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+            "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://docs.google.com https://docs.goog[...]",
         };
         if (path.basename(filePath) === "service-worker.js") headers["Cache-Control"] = "no-cache";
         res.writeHead(200, headers);
@@ -915,9 +919,25 @@ function serveStatic(req, res, url) {
 const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://localhost");
     try {
+        // Apply CORS when ALLOWED_ORIGINS is configured. This allows safe cross-origin usage when explicitly enabled.
+        const origin = req.headers.origin;
+        if (origin && ALLOWED_ORIGINS && ALLOWED_ORIGINS.includes(origin)) {
+            res.setHeader("Access-Control-Allow-Origin", origin);
+            res.setHeader("Access-Control-Allow-Credentials", "true");
+            res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-CSRF-Token");
+            res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+        }
+
+        // Handle preflight requests
+        if (req.method === 'OPTIONS') {
+            res.writeHead(204);
+            return res.end();
+        }
+
         if (url.pathname.startsWith("/api/")) return await handleApi(req, res, url);
         return serveStatic(req, res, url);
     } catch (error) {
+        console.error("Erro interno no servidor:", error && error.stack ? error.stack : error);
         return json(res, 500, { error: "Falha interna" });
     }
 });
